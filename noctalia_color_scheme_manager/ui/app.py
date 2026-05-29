@@ -7,9 +7,9 @@ import gi  # noqa: E401
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw  # noqa: E402
 
-from .main_window import MainWindow
+from .main_window import MainWindow  # noqa: E402
 
 
 class App(Adw.Application):
@@ -30,7 +30,7 @@ class App(Adw.Application):
         window.set_default_size(1100, 750)
 
         main = MainWindow()
-        window.set_content(main)
+        window.set_content(main.get_widget())
 
         window.present()
 

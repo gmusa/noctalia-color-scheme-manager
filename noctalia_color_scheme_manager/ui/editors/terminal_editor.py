@@ -1,13 +1,11 @@
 """Terminal colors editor widget."""
 
-import sys
-
 import gi  # noqa: E401
 
 gi.require_version("Gtk", "4.0")
-gi.require_version("Gdk", "4.0")
+gi.require_version("Gdk", "4.0")  # noqa: F401
 
-from gi.repository import Gtk, Gdk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 from ..widgets.color_tile import ColorTile  # noqa: E402
 
@@ -68,16 +66,18 @@ class TerminalEditor(Gtk.Box):
             grid.attach(row_label, 0, row, 1, 1)
 
             normal_tile = ColorTile(
-                color_key.capitalize(),
-                normal_colors.get(color_key, "#000000"),
-                show_label=False
+                label=color_key.capitalize(),
+                color_key=f"terminal.normal.{color_key}",
+                initial_color=normal_colors.get(color_key, "#000000"),
+                show_label=False,
             )
             grid.attach(normal_tile, 1, row, 1, 1)
 
             bright_tile = ColorTile(
-                color_key.capitalize(),
-                bright_colors.get(color_key, "#000000"),
-                show_label=False
+                label=color_key.capitalize(),
+                color_key=f"terminal.bright.{color_key}",
+                initial_color=bright_colors.get(color_key, "#000000"),
+                show_label=False,
             )
             grid.attach(bright_tile, 2, row, 1, 1)
 
@@ -114,7 +114,12 @@ class TerminalEditor(Gtk.Box):
             item_label.set_hexpand(True)
             grid.attach(item_label, 0, row, 1, 1)
 
-            special_tile = ColorTile(key, term.get(key, "#000000"), show_label=False)
+            special_tile = ColorTile(
+                label=key,
+                color_key=f"terminal.{key}",
+                initial_color=term.get(key, "#000000"),
+                show_label=False,
+            )
             grid.attach(special_tile, 1, row, 1, 1)
 
             empty = Gtk.Label()

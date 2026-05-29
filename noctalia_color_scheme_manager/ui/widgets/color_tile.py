@@ -59,7 +59,7 @@ def darken_color(hex_color: str, amount: float = 0.1) -> str:
     r = max(0.0, r - amount)
     g = max(0.0, g - amount)
     b = max(0.0, b - amount)
-    return f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
+    return f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
 
 
 def validate_hex(hex_color: str) -> bool:
@@ -110,7 +110,8 @@ class ColorTile(Gtk.Box):
     Args:
         label: Display label for the color row
         color_key: Key in the colors dict (e.g. "mPrimary")
-        reactive_colors: ReactiveColors instance to emit changes to
+        reactive_colors: ReactiveColors instance to emit changes to (optional)
+        initial_color: Initial hex color value (overrides reactive_colors lookup)
         show_label: Whether to show the label (default True)
     """
 
@@ -119,12 +120,21 @@ class ColorTile(Gtk.Box):
         label: str,
         color_key: str,
         reactive_colors: ReactiveColors | None = None,
+        initial_color: str | None = None,
         show_label: bool = True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.color_key = color_key
         self.reactive_colors = reactive_colors
+
+        # Determine initial color: explicit > reactive > default
+        if initial_color:
+            self._initial_color = initial_color
+        elif reactive_colors:
+            self._initial_color = reactive_colors.get(color_key, "#000000")
+        else:
+            self._initial_color = "#000000"
 
         self.set_spacing(8)
         self.set_valign(Gtk.Align.CENTER)
@@ -139,15 +149,14 @@ class ColorTile(Gtk.Box):
             self.append(lbl)
 
         self.hex_entry = Gtk.Entry()
-        self.hex_entry.set_text(reactive_colors.get(color_key) if reactive_colors else "#000000")
+        self.hex_entry.set_text(self._initial_color)
         self.hex_entry.set_width_chars(8)
         self.hex_entry.set_hexpand(False)
         self.hex_entry.connect("changed", self._on_hex_changed)
         self.append(self.hex_entry)
 
         self.color_btn = Gtk.ColorButton()
-        initial_color = reactive_colors.get(color_key) if reactive_colors else "#000000"
-        self.color_btn.set_rgba(hex_to_rgba(initial_color))
+        self.color_btn.set_rgba(hex_to_rgba(self._initial_color))
         self.color_btn.connect("color-set", self._on_color_set)
         self.append(self.color_btn)
 
@@ -160,7 +169,7 @@ class ColorTile(Gtk.Box):
     def _on_color_set(self, btn: Gtk.ColorButton) -> None:
         """Handle color picker changes."""
         rgba = btn.get_rgba()
-        value = f"#{int(rgba.red*255):02x}{int(rgba.green*255):02x}{int(rgba.blue*255):02x}"
+        value = f"#{int(rgba.red * 255):02x}{int(rgba.green * 255):02x}{int(rgba.blue * 255):02x}"
         self.hex_entry.set_text(value)
         if self.reactive_colors:
             self.reactive_colors.update(self.color_key, value)

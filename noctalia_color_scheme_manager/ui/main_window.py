@@ -1,132 +1,174 @@
 """Main window: sidebar with theme list + content area."""
 
+import logging
+
 import gi  # noqa: E401
 
 gi.require_version("Adw", "1")
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import GObject, Gtk  # noqa: E402
 
-from .theme_editor import ThemeEditor
-
-# Default Monokai colors for demo
-DARK_COLORS = {
-    "mPrimary": "#66d9ef",
-    "mOnPrimary": "#272822",
-    "mSecondary": "#a6e22e",
-    "mOnSecondary": "#272822",
-    "mTertiary": "#ae81ff",
-    "mOnTertiary": "#272822",
-    "mError": "#f92672",
-    "mOnError": "#f8f8f2",
-    "mSurface": "#272822",
-    "mOnSurface": "#f8f8f2",
-    "mSurfaceVariant": "#3e3d32",
-    "mOnSurfaceVariant": "#75715e",
-    "mOutline": "#75715e",
-    "mShadow": "#000000",
-    "mHover": "#49483e",
-    "mOnHover": "#f8f8f2",
-    "terminal": {
-        "foreground": "#f8f8f2",
-        "background": "#272822",
-        "normal": {
-            "black": "#272822",
-            "red": "#f92672",
-            "green": "#a6e22e",
-            "yellow": "#e6db74",
-            "blue": "#66d9ef",
-            "magenta": "#ae81ff",
-            "cyan": "#a1efe4",
-            "white": "#f8f8f2",
-        },
-        "bright": {
-            "black": "#75715e",
-            "red": "#f92672",
-            "green": "#a6e22e",
-            "yellow": "#e6db74",
-            "blue": "#66d9ef",
-            "magenta": "#ae81ff",
-            "cyan": "#a1efe4",
-            "white": "#ffffff",
-        },
-        "cursor": "#f8f8f0",
-        "cursorText": "#272822",
-        "selectionFg": "#f8f8f2",
-        "selectionBg": "#49483e",
-    },
-}
-
-LIGHT_COLORS = {
-    "mPrimary": "#00a8c6",
-    "mOnPrimary": "#ffffff",
-    "mSecondary": "#72a818",
-    "mOnSecondary": "#ffffff",
-    "mTertiary": "#8959a8",
-    "mOnTertiary": "#ffffff",
-    "mError": "#d12f5b",
-    "mOnError": "#ffffff",
-    "mSurface": "#fafafa",
-    "mOnSurface": "#272822",
-    "mSurfaceVariant": "#e8e8e8",
-    "mOnSurfaceVariant": "#75715e",
-    "mOutline": "#cccccc",
-    "mShadow": "#d5d5d5",
-    "mHover": "#e8e8e8",
-    "mOnHover": "#272822",
-    "terminal": {
-        "foreground": "#272822",
-        "background": "#fafafa",
-        "normal": {
-            "black": "#272822",
-            "red": "#d12f5b",
-            "green": "#72a818",
-            "yellow": "#c4a000",
-            "blue": "#00a8c6",
-            "magenta": "#8959a8",
-            "cyan": "#319aa5",
-            "white": "#e8e8e8",
-        },
-        "bright": {
-            "black": "#75715e",
-            "red": "#f92672",
-            "green": "#a6e22e",
-            "yellow": "#e6db74",
-            "blue": "#66d9ef",
-            "magenta": "#ae81ff",
-            "cyan": "#a1efe4",
-            "white": "#fafafa",
-        },
-        "cursor": "#272822",
-        "cursorText": "#fafafa",
-        "selectionFg": "#272822",
-        "selectionBg": "#d5d5d5",
-    },
-}
+from ..data import SystemThemeLoader, ThemeModel  # noqa: E402
+from .theme_editor import ThemeEditor  # noqa: E402
 
 
-class MainWindow(Adw.Bin):
+class MainWindow(GObject.Object):
     """Main window with sidebar for theme list.
 
-    Args:
-        theme_name: Initial theme to display (default "monokai")
-        dark_colors: Dict with dark variant colors
-        light_colors: Dict with light variant colors
+    Themes are loaded dynamically from ~/.config/noctalia/colorschemes/
+    using the SystemThemeLoader.
     """
 
-    def __init__(
-        self,
-        theme_name: str = "monokai",
-        dark_colors: dict | None = None,
-        light_colors: dict | None = None,
-        **kwargs
-    ):
-        super().__init__(**kwargs)
-        self._theme_name = theme_name
-        self._dark_colors = dark_colors or DARK_COLORS
-        self._light_colors = light_colors or LIGHT_COLORS
+    def __init__(self, **kwargs: GObject.GObject.ConstructorProperties) -> None:
+        """Initialize the main window.
 
-        # Use a paned layout: sidebar fixed width (max 350), content fills rest
+        Loads available themes from the system themes directory and displays
+        them in the sidebar. The first theme is selected by default.
+        """
+        super().__init__(**kwargs)
+        self._theme_loader = SystemThemeLoader()
+        self._theme_buttons: dict[str, Gtk.ToggleButton] = {}
+        self._current_theme: ThemeModel | None = None
+        self._theme_list_box: Gtk.Box | None = None
+        self._empty_label: Gtk.Label | None = None
+        self._content_box: Gtk.Box | None = None
+
+        # Build the UI
+        self._widget = self._build_widget()
+        self._load_themes()
+
+    def get_widget(self) -> Gtk.Widget:
+        """Get the main widget."""
+        return self._widget
+
+    def _load_themes(self) -> None:
+        """Load themes from system directory and populate sidebar."""
+        themes = self._theme_loader.list_themes()
+        self._populate_sidebar(themes)
+
+        # Auto-select first theme if available
+        if themes:
+            self._on_theme_selected(themes[0])
+
+    def _populate_sidebar(self, themes: list[str]) -> None:
+        """Populate the sidebar with theme buttons.
+
+        Args:
+            themes: List of theme names to display
+        """
+        if self._theme_list_box is None:
+            return
+
+        # Clear existing buttons
+        for btn in list(self._theme_buttons.values()):
+            self._theme_list_box.remove(btn)
+        self._theme_buttons.clear()
+
+        if self._empty_label is None:
+            return
+
+        if not themes:
+            # Show empty state message
+            self._empty_label.set_visible(True)
+        else:
+            self._empty_label.set_visible(False)
+            for name in themes:
+                btn = Gtk.ToggleButton()
+                btn.set_label(name)
+                btn.set_hexpand(True)
+                btn.set_halign(Gtk.Align.FILL)
+                btn.connect("clicked", self._on_button_clicked, name)
+                self._theme_list_box.append(btn)
+                self._theme_buttons[name] = btn
+
+    def _on_button_clicked(self, btn: Gtk.ToggleButton, theme_name: str) -> None:
+        """Handle theme button click.
+
+        Args:
+            btn: The clicked button
+            theme_name: Name of the theme
+        """
+        if btn.get_active():
+            self._on_theme_selected(theme_name)
+
+    def _on_theme_selected(self, name: str) -> None:
+        """Load and display the selected theme.
+
+        Args:
+            name: Theme directory name
+        """
+        # Update toggle states
+        for theme, btn in self._theme_buttons.items():
+            btn.set_active(theme == name)
+
+        try:
+            theme = self._theme_loader.load_theme(name)
+            self._current_theme = theme
+            self._show_editor(theme)
+        except (FileNotFoundError, ValueError) as e:
+            logging.error("Failed to load theme '%s': %s", name, e)
+            # Clear editor on error
+            self._show_error(name, str(e))
+
+    def _show_editor(self, theme: ThemeModel) -> None:
+        """Display the theme editor with the given theme.
+
+        Args:
+            theme: Loaded ThemeModel to display
+        """
+        if self._content_box is None:
+            return
+
+        # Clear content box
+        while child := self._content_box.get_first_child():
+            self._content_box.remove(child)
+
+        # Create editor with theme colors
+        editor = ThemeEditor(
+            theme.name,
+            theme.dark.to_dict(),
+            theme.light.to_dict(),
+        )
+        self._content_box.append(editor)
+
+    def _show_error(self, theme_name: str, error: str) -> None:
+        """Show an error message when theme loading fails.
+
+        Args:
+            theme_name: Name of the failed theme
+            error: Error message
+        """
+        if self._content_box is None:
+            return
+
+        while child := self._content_box.get_first_child():
+            self._content_box.remove(child)
+
+        error_box = Gtk.Box()
+        error_box.set_orientation(Gtk.Orientation.VERTICAL)
+        error_box.set_spacing(8)
+        error_box.set_halign(Gtk.Align.CENTER)
+        error_box.set_valign(Gtk.Align.CENTER)
+
+        icon = Gtk.Image.new_from_icon_name("dialog-error-symbolic")
+        icon.set_pixel_size(48)
+        error_box.append(icon)
+
+        label = Gtk.Label()
+        label.set_markup(f"<b>Failed to load theme</b>\n{theme_name}")
+        error_box.append(label)
+
+        detail = Gtk.Label()
+        detail.set_text(error)
+        detail.add_css_class("dim-label")
+        error_box.append(detail)
+
+        self._content_box.append(error_box)
+
+    def _build_widget(self) -> Gtk.Widget:
+        """Build the complete widget tree."""
+        # Use a paned layout: sidebar fixed width, content fills rest
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_hexpand(True)
 
@@ -138,19 +180,20 @@ class MainWindow(Adw.Bin):
         paned.set_shrink_start_child(False)
 
         # Content panel
-        editor = ThemeEditor(
-            self._theme_name,
-            self._dark_colors,
-            self._light_colors,
-        )
-        paned.set_end_child(editor)
+        content = Gtk.Box()
+        content.set_orientation(Gtk.Orientation.VERTICAL)
+        content.set_hexpand(True)
+        content.set_vexpand(True)
+        self._content_box = content
+
+        paned.set_end_child(content)
         paned.set_resize_end_child(True)
         paned.set_shrink_end_child(False)
 
-        self.set_child(paned)
+        return paned
 
     def _build_sidebar(self) -> Gtk.Widget:
-        """Build the theme list sidebar with max-width."""
+        """Build the theme list sidebar."""
         container = Gtk.Box()
         container.set_orientation(Gtk.Orientation.VERTICAL)
         container.add_css_class("sidebar")
@@ -181,17 +224,24 @@ class MainWindow(Adw.Bin):
         theme_list.set_margin_start(16)
         theme_list.set_margin_end(16)
         theme_list.set_hexpand(True)
-
-        for name in ["monokai", "GitHub Dark", "Oxocarbon"]:
-            btn = Gtk.ToggleButton()
-            btn.set_label(name)
-            btn.set_hexpand(True)
-            btn.set_halign(Gtk.Align.FILL)
-            theme_list.append(btn)
+        self._theme_list_box = theme_list
 
         sidebar.append(theme_list)
 
-        # Spacer to maintain space between theme list and add section
+        # Empty state label
+        empty_label = Gtk.Label()
+        empty_label.set_markup(
+            "No themes found\n<small>Add themes to ~/.config/noctalia/colorschemes/</small>"
+        )
+        empty_label.add_css_class("dim-label")
+        empty_label.set_visible(False)
+        empty_label.set_margin_start(16)
+        empty_label.set_margin_end(16)
+        empty_label.set_wrap(True)
+        self._empty_label = empty_label
+        sidebar.append(empty_label)
+
+        # Spacer
         spacer = Gtk.Box()
         spacer.set_vexpand(True)
         sidebar.append(spacer)

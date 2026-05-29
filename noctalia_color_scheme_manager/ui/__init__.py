@@ -8,7 +8,7 @@ Components:
 """
 
 from .app import App
-from .main_window import MainWindow, DARK_COLORS, LIGHT_COLORS
+from .main_window import MainWindow
 from .theme_editor import ThemeEditor
 from .variant_page import VariantPage
 
@@ -17,6 +17,4 @@ __all__ = [
     "MainWindow",
     "ThemeEditor",
     "VariantPage",
-    "DARK_COLORS",
-    "LIGHT_COLORS",
 ]

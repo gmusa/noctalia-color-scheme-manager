@@ -15,6 +15,7 @@ Public API:
 from .schema import get_default_theme, validate_color, validate_theme
 from .theme_model import ThemeModel, VariantColors, TerminalColors
 from .theme_manager import ThemeManager
+from .system_theme_loader import SystemThemeLoader
 
 __all__ = [
     "ThemeManager",
@@ -24,4 +25,5 @@ __all__ = [
     "validate_theme",
     "validate_color",
     "get_default_theme",
+    "SystemThemeLoader",
 ]
