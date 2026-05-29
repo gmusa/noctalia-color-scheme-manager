@@ -8,6 +8,7 @@ gi.require_version("Gdk", "4.0")  # noqa: F401
 from gi.repository import Gtk  # noqa: E402
 
 from ..widgets.color_tile import ColorTile  # noqa: E402
+from ..widgets.preview import ReactiveColors  # noqa: E402
 
 TERMINAL_COLORS = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]
 
@@ -16,10 +17,10 @@ class TerminalEditor(Gtk.Box):
     """Terminal colors section with grid layout.
 
     Args:
-        colors: Dict with terminal color tokens including 'terminal' sub-dict
+        reactive_colors: ReactiveColors instance for reactive updates
     """
 
-    def __init__(self, colors: dict, **kwargs):
+    def __init__(self, reactive_colors: ReactiveColors, **kwargs):
         super().__init__(**kwargs)
         self.set_orientation(Gtk.Orientation.VERTICAL)
         self.set_spacing(8)
@@ -28,6 +29,8 @@ class TerminalEditor(Gtk.Box):
         self.set_margin_top(16)
         self.set_margin_bottom(16)
 
+        self.reactive_colors = reactive_colors
+        colors = reactive_colors.get_all()
         term = colors.get("terminal", {})
         normal_colors = term.get("normal", {})
         bright_colors = term.get("bright", {})
@@ -68,6 +71,7 @@ class TerminalEditor(Gtk.Box):
             normal_tile = ColorTile(
                 label=color_key.capitalize(),
                 color_key=f"terminal.normal.{color_key}",
+                reactive_colors=reactive_colors,
                 initial_color=normal_colors.get(color_key, "#000000"),
                 show_label=False,
             )
@@ -76,6 +80,7 @@ class TerminalEditor(Gtk.Box):
             bright_tile = ColorTile(
                 label=color_key.capitalize(),
                 color_key=f"terminal.bright.{color_key}",
+                reactive_colors=reactive_colors,
                 initial_color=bright_colors.get(color_key, "#000000"),
                 show_label=False,
             )
@@ -117,6 +122,7 @@ class TerminalEditor(Gtk.Box):
             special_tile = ColorTile(
                 label=key,
                 color_key=f"terminal.{key}",
+                reactive_colors=reactive_colors,
                 initial_color=term.get(key, "#000000"),
                 show_label=False,
             )

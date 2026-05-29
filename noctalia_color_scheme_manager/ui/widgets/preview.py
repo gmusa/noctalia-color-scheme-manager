@@ -5,8 +5,9 @@ import gi  # noqa: E401
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 
-from gi.repository import Gdk, Gtk  # noqa: E402
+from typing import Callable
 
+from gi.repository import Gtk  # noqa: E402
 from .color_tile import darken_color, hex_to_rgb
 
 
@@ -22,13 +23,13 @@ class ReactiveColors:
 
     def __init__(self, colors: dict) -> None:
         self._colors: dict = dict(colors)
-        self._callbacks: list[callable] = []
+        self._callbacks: list[Callable[[dict], None]] = []
 
-    def connect(self, callback: callable) -> None:
+    def connect(self, callback: Callable[[dict], None]) -> None:
         """Register a callback to be called when colors change."""
         self._callbacks.append(callback)
 
-    def disconnect(self, callback: callable) -> None:
+    def disconnect(self, callback: Callable[[dict], None]) -> None:
         """Unregister a callback."""
         if callback in self._callbacks:
             self._callbacks.remove(callback)
@@ -52,20 +53,7 @@ class ReactiveColors:
 
 
 class ChipDrawingArea(Gtk.DrawingArea):
-    """Custom DrawingArea for a color chip with hover, outline, and shadow support.
-
-    Properties:
-        bg_color: Normal background color
-        fg_color: Normal foreground (text) color
-        hover_bg: Hover background color (None = auto-darken)
-        hover_fg: Hover foreground color (None = use fg_color)
-        outline_color: Border color (None = no border)
-        shadow_color: Shadow color (None = no shadow)
-        label: Text to display (default "Aa")
-
-    Signals:
-        hover-changed: Emitted when hover state changes (emits True/False)
-    """
+    """Custom DrawingArea for a color chip with hover, outline, and shadow support."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -76,11 +64,10 @@ class ChipDrawingArea(Gtk.DrawingArea):
         outline_color: str | None = None,
         shadow_color: str | None = None,
         label: str = "Aa",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
 
-        # Store properties
         self.bg_color = bg_color
         self.fg_color = fg_color
         self.hover_bg = hover_bg
@@ -89,37 +76,24 @@ class ChipDrawingArea(Gtk.DrawingArea):
         self.shadow_color = shadow_color
         self.label = label
 
-        # Hover state
         self._is_hovering = False
-
-        # Size
         self.set_size_request(60, 40)
-
-        # Draw callback
         self.set_draw_func(self._draw)
 
-        # Hover detection via motion controller (GTK4 compatible)
         motion_controller = Gtk.EventControllerMotion()
         motion_controller.connect("enter", self._on_enter)
         motion_controller.connect("leave", self._on_leave)
         self.add_controller(motion_controller)
 
     def _on_enter(self, controller, x: float, y: float) -> None:
-        """Handle mouse enter event."""
         self._is_hovering = True
         self.queue_draw()
 
     def _on_leave(self, controller) -> None:
-        """Handle mouse leave event."""
         self._is_hovering = False
         self.queue_draw()
 
     def _get_effective_colors(self) -> tuple[str, str]:
-        """Return (bg, fg) based on hover state.
-
-        If hover_bg is defined, use it; otherwise auto-darken bg_color.
-        If hover_fg is defined, use it; otherwise use fg_color.
-        """
         if self._is_hovering:
             bg = self.hover_bg if self.hover_bg else darken_color(self.bg_color)
             fg = self.hover_fg if self.hover_fg else self.fg_color
@@ -127,30 +101,19 @@ class ChipDrawingArea(Gtk.DrawingArea):
         return self.bg_color, self.fg_color
 
     def _draw(self, area, cr, w, h, data=None):
-        """Draw the chip with current colors and hover state."""
         bg, fg = self._get_effective_colors()
 
-        # Shadow (if defined) - drop shadow offset behind chip
-        # Draw shadow FIRST so it appears behind the chip
         if self.shadow_color:
             r, g, b = hex_to_rgb(self.shadow_color)
-            # Offset shadow (bottom-right of chip)
-            shadow_x = 3
-            shadow_y = 3
-            shadow_w = w - shadow_x
-            shadow_h = h - shadow_y
-            # Draw shadow rectangle
             cr.set_source_rgba(r, g, b, 0.6)
-            cr.rectangle(shadow_x, shadow_y, shadow_w, shadow_h)
+            cr.rectangle(3, 3, w - 3, h - 3)
             cr.fill()
 
-        # Main background
         r, g, b = hex_to_rgb(bg)
         cr.set_source_rgb(r, g, b)
         cr.rectangle(0, 0, w, h)
         cr.fill()
 
-        # Outline border (if defined)
         if self.outline_color:
             r, g, b = hex_to_rgb(self.outline_color)
             cr.set_source_rgba(r, g, b, 0.7)
@@ -158,7 +121,6 @@ class ChipDrawingArea(Gtk.DrawingArea):
             cr.rectangle(1, 1, w - 2, h - 2)
             cr.stroke()
 
-        # Text centered
         r, g, b = hex_to_rgb(fg)
         cr.set_source_rgb(r, g, b)
         cr.select_font_face("Sans", 0, 0)
@@ -174,7 +136,6 @@ class ColorChip(Gtk.Box):
     """A color chip drawn with cairo.
 
     Wrapper around ChipDrawingArea that provides a fixed-size container.
-    Exposes the ChipDrawingArea properties for reactive updates.
     """
 
     def __init__(  # noqa: PLR0913
@@ -186,14 +147,13 @@ class ColorChip(Gtk.Box):
         outline_color: str | None = None,
         shadow_color: str | None = None,
         label: str = "Aa",
-        **kwargs
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.set_size_request(65, 45)
         self.set_halign(Gtk.Align.FILL)
         self.set_valign(Gtk.Align.FILL)
 
-        # Drawing area for the chip
         self._area = ChipDrawingArea(
             bg_color=bg_color,
             fg_color=fg_color,
@@ -263,18 +223,10 @@ class ColorChip(Gtk.Box):
 
 
 class ColorRow(Gtk.Box):
-    """A row showing a color with its 4 style variants.
-
-    Uses ReactiveColors for reactive updates and hover support.
-    """
+    """A row showing a color with its 4 style variants."""
 
     def __init__(  # noqa: PLR0913
-        self,
-        label: str,
-        reactive_colors: ReactiveColors,
-        color_key: str,
-        on_key: str,
-        **kwargs
+        self, label: str, reactive_colors: ReactiveColors, color_key: str, on_key: str, **kwargs
     ):
         super().__init__(**kwargs)
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
@@ -287,10 +239,8 @@ class ColorRow(Gtk.Box):
         self.on_key = on_key
         self.chips: list[ColorChip] = []
 
-        # Connect to reactive colors
         self.reactive_colors.connect(self._on_colors_changed)
 
-        # Label
         name_lbl = Gtk.Label()
         name_lbl.set_text(label)
         name_lbl.set_size_request(80, -1)
@@ -299,23 +249,19 @@ class ColorRow(Gtk.Box):
         name_lbl.add_css_class("dim-label")
         self.append(name_lbl)
 
-        # Create 4 chips with hover support
         self._create_chips()
 
     def _create_chips(self) -> None:
-        """Create or update the 4 variant chips."""
         colors = self.reactive_colors.get_all()
         bg = colors.get(self.color_key, "#808080")
         fg = colors.get(self.on_key, "#ffffff")
         hover_bg = colors.get("mHover")
         hover_fg = colors.get("mOnHover")
 
-        # Clear existing chips
         for chip in self.chips:
             self.remove(chip)
         self.chips.clear()
 
-        # 4 variants: (no O, no S), (O, no S), (no O, S), (O, S)
         for has_outline, has_shadow in [
             (False, False),
             (True, False),
@@ -337,7 +283,6 @@ class ColorRow(Gtk.Box):
             self.append(chip)
 
     def _on_colors_changed(self, colors: dict) -> None:
-        """Handle colors-changed callback from ReactiveColors."""
         bg = colors.get(self.color_key, "#808080")
         fg = colors.get(self.on_key, "#ffffff")
         hover_bg = colors.get("mHover")
@@ -345,12 +290,14 @@ class ColorRow(Gtk.Box):
         outline = colors.get("mOutline")
         shadow = colors.get("mShadow")
 
-        for i, (has_outline, has_shadow) in enumerate([
-            (False, False),
-            (True, False),
-            (False, True),
-            (True, True),
-        ]):
+        for i, (has_outline, has_shadow) in enumerate(
+            [
+                (False, False),
+                (True, False),
+                (False, True),
+                (True, True),
+            ]
+        ):
             chip = self.chips[i]
             chip.bg_color = bg
             chip.fg_color = fg
@@ -361,16 +308,19 @@ class ColorRow(Gtk.Box):
             chip.queue_draw()
 
 
-class MaterialPreview(Gtk.Frame):
+class MaterialPreview(Gtk.Box):
     """Material Design preview with all color variants.
 
-    Uses ReactiveColors for reactive updates when colors change in the editor.
+    Background is set to mSurface color.
+    Updates reactively when colors change.
     """
 
     def __init__(self, reactive_colors: ReactiveColors, **kwargs):
         super().__init__(**kwargs)
+        self.set_orientation(Gtk.Orientation.VERTICAL)
         self.reactive_colors = reactive_colors
         self.rows: list[ColorRow] = []
+        self._bg_provider: Gtk.CssProvider | None = None
 
         self.add_css_class("card")
         self.set_valign(Gtk.Align.START)
@@ -380,9 +330,17 @@ class MaterialPreview(Gtk.Frame):
         self.set_margin_top(12)
         self.set_margin_bottom(12)
 
-        main_box = Gtk.Box()
-        main_box.set_orientation(Gtk.Orientation.VERTICAL)
-        main_box.set_spacing(8)
+        # Inner box with 8px padding for content
+        self.main_box = Gtk.Box()
+        self.main_box.set_orientation(Gtk.Orientation.VERTICAL)
+        self.main_box.set_spacing(8)
+        self.main_box.set_margin_start(8)
+        self.main_box.set_margin_end(8)
+        self.main_box.set_margin_top(8)
+        self.main_box.set_margin_bottom(8)
+        self.main_box.set_hexpand(True)
+        self.main_box.set_vexpand(True)
+        self.main_box.add_css_class("material-preview-inner")
 
         # Column headers
         header = Gtk.Box()
@@ -402,7 +360,7 @@ class MaterialPreview(Gtk.Frame):
             lbl.add_css_class("dim-label")
             header.append(lbl)
 
-        main_box.append(header)
+        self.main_box.append(header)
 
         # Main colors
         for label, color_key, on_key in [
@@ -413,13 +371,13 @@ class MaterialPreview(Gtk.Frame):
         ]:
             row = ColorRow(label, reactive_colors, color_key, on_key)
             self.rows.append(row)
-            main_box.append(row)
+            self.main_box.append(row)
 
         # Separator
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
         sep.set_margin_top(8)
         sep.set_margin_bottom(8)
-        main_box.append(sep)
+        self.main_box.append(sep)
 
         # Surface colors
         for label, color_key, on_key in [
@@ -428,16 +386,64 @@ class MaterialPreview(Gtk.Frame):
         ]:
             row = ColorRow(label, reactive_colors, color_key, on_key)
             self.rows.append(row)
-            main_box.append(row)
+            self.main_box.append(row)
 
-        self.set_child(main_box)
+        self.append(self.main_box)
+
+        # Connect for background updates
+        self.reactive_colors.connect(self._on_colors_changed)
+        self._update_background()
+
+    def _on_colors_changed(self, colors: dict) -> None:
+        """Handle reactive colors updates for background."""
+        self._update_background()
+
+    def _update_background(self) -> None:
+        """Update background color on outer widget with border-radius."""
+        colors = self.reactive_colors.get_all()
+        surface = colors.get("mSurface", "#ffffff")
+        on_surface = colors.get("mOnSurface", "#000000")
+        css = f"""
+            .material-preview-bg {{
+                background-color: {surface};
+                color: {on_surface};
+                border-radius: 12px;
+            }}
+            .material-preview-bg label {{
+                color: {on_surface};
+            }}
+        """
+        # Reuse or create provider
+        if self._bg_provider is None:
+            self._bg_provider = Gtk.CssProvider()
+            self.get_style_context().add_provider(
+                self._bg_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+            self.main_box.get_style_context().add_provider(
+                self._bg_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+        self._bg_provider.load_from_data(css.encode())
+        self.get_style_context().add_class("material-preview-bg")
+        self.main_box.get_style_context().add_class("material-preview-bg")
+
+    def cleanup(self) -> None:
+        """Disconnect from reactive colors."""
+        self.reactive_colors.disconnect(self._on_colors_changed)
 
 
-class TerminalPreview(Gtk.Frame):
-    """Terminal preview frame with simulated command output."""
+class TerminalPreview(Gtk.Box):
+    """Terminal preview simulating exa -l command output.
 
-    def __init__(self, colors: dict, **kwargs):
+    Background is set to terminal background color.
+    Updates reactively when colors change.
+    """
+
+    def __init__(self, reactive_colors: ReactiveColors, **kwargs):
         super().__init__(**kwargs)
+        self.set_orientation(Gtk.Orientation.VERTICAL)
+        self.reactive_colors = reactive_colors
+        self._bg_provider: Gtk.CssProvider | None = None
+
         self.add_css_class("card")
         self.set_valign(Gtk.Align.START)
         self.set_hexpand(True)
@@ -446,17 +452,315 @@ class TerminalPreview(Gtk.Frame):
         self.set_margin_top(12)
         self.set_margin_bottom(12)
 
-        box = Gtk.Box()
-        box.set_orientation(Gtk.Orientation.VERTICAL)
-        box.set_spacing(4)
+        # Inner box with terminal background and 8px padding
+        self.main_box = Gtk.Box()
+        self.main_box.set_orientation(Gtk.Orientation.VERTICAL)
+        self.main_box.set_spacing(2)
+        self.main_box.set_margin_start(8)
+        self.main_box.set_margin_end(8)
+        self.main_box.set_margin_top(8)
+        self.main_box.set_margin_bottom(8)
+        self.main_box.set_hexpand(True)
+        self.main_box.set_vexpand(True)
+        self.main_box.add_css_class("terminal-preview-inner")
 
-        p1 = Gtk.Label()
-        p1.set_text("$ ls -la")
-        box.append(p1)
+        # Title
+        title = Gtk.Label()
+        title.set_text("Terminal Preview")
+        title.add_css_class("title-5")
+        title.set_halign(Gtk.Align.START)
+        self.main_box.append(title)
 
-        p2 = Gtk.Label()
-        p2.set_text("drwxr-xr-x  2 user  staff")
-        p2.add_css_class("dim-label")
-        box.append(p2)
+        # Content area for sample output
+        self.content_box = Gtk.Box()
+        self.content_box.set_orientation(Gtk.Orientation.VERTICAL)
+        self.content_box.set_spacing(0)
+        self.main_box.append(self.content_box)
 
-        self.set_child(box)
+        self.append(self.main_box)
+
+        # Connect to reactive colors
+        self.reactive_colors.connect(self._on_colors_changed)
+        self._update_content()
+
+    def _on_colors_changed(self, colors: dict) -> None:
+        """Handle reactive colors updates."""
+        self._update_content()
+
+    def _update_content(self) -> None:
+        """Rebuild content based on current colors."""
+        # Clear content
+        child = self.content_box.get_first_child()
+        while child is not None:
+            self.content_box.remove(child)
+            child = self.content_box.get_first_child()
+
+        colors = self.reactive_colors.get_all()
+        sample_widget = self._build_sample_output(colors)
+        self.content_box.append(sample_widget)
+        self._update_background()
+
+    def _update_background(self) -> None:
+        """Update background color on outer widget with border-radius."""
+        colors = self.reactive_colors.get_all()
+        # Handle both flat keys (after edits) and nested dict (initial state)
+        bg = colors.get("terminal.background") or colors.get("terminal", {}).get(
+            "background", "#000000"
+        )
+        fg = colors.get("terminal.foreground") or colors.get("terminal", {}).get(
+            "foreground", "#ffffff"
+        )
+        css = f"""
+            .terminal-preview-bg {{
+                background-color: {bg};
+                color: {fg};
+                border-radius: 12px;
+            }}
+            .terminal-preview-bg label {{
+                color: {fg};
+            }}
+        """
+        # Reuse or create provider
+        if self._bg_provider is None:
+            self._bg_provider = Gtk.CssProvider()
+            self.get_style_context().add_provider(
+                self._bg_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+            self.main_box.get_style_context().add_provider(
+                self._bg_provider, Gtk.STYLE_PROVIDER_PRIORITY_USER
+            )
+        self._bg_provider.load_from_data(css.encode())
+        self.get_style_context().add_class("terminal-preview-bg")
+        self.main_box.get_style_context().add_class("terminal-preview-bg")
+
+    def _build_sample_output(self, colors: dict) -> Gtk.Widget:
+        """Build simulated exa -l output matching the exact exa color scheme."""
+        # Handle both flat keys (after edits) and nested dict (initial state)
+        term = colors.get("terminal", {})
+        fg = colors.get("terminal.foreground") or term.get("foreground", "#ffffff")
+        normal = {}
+        bright = {}
+        for color_key in ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"]:
+            # Try flat key first, then nested
+            flat_normal = colors.get(f"terminal.normal.{color_key}")
+            flat_bright = colors.get(f"terminal.bright.{color_key}")
+            normal[color_key] = flat_normal or term.get("normal", {}).get(color_key, "#808080")
+            bright[color_key] = flat_bright or term.get("bright", {}).get(color_key, "#808080")
+
+        # Container
+        container = Gtk.Box()
+        container.set_orientation(Gtk.Orientation.VERTICAL)
+        container.set_spacing(0)
+
+        # Helper to get color with fallback
+        def c(color_key: str) -> str:
+            col = bright.get(color_key)
+            if col is None:
+                col = normal.get(color_key)
+            return col if col else fg
+
+        # exa -l color scheme
+        sample_lines = [
+            # d rwx r-x r-x  gmusa  staff   -  May 28 15:49 docs
+            [
+                ("d", c("cyan")),
+                (":", c("bright")),
+                ("rwx", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                (" ", fg),
+                ("-", c("bright")),
+                (" ", fg),
+                ("May 28 15:49 ", c("cyan")),
+                ("docs", c("cyan")),
+            ],
+            # d rwx r-x r-x  gmusa  staff      -  May 29 15:54 openspec
+            [
+                ("d", c("cyan")),
+                (":", c("bright")),
+                ("rwx", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("-", c("bright")),
+                (" ", fg),
+                ("May 29 15:54 ", c("cyan")),
+                ("openspec", c("cyan")),
+            ],
+            # d rwx r-x r-x  gmusa  staff      -  May 28 13:03 noctalia_color_scheme_manager
+            [
+                ("d", c("cyan")),
+                (":", c("bright")),
+                ("rwx", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                ("r-x", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("-", c("bright")),
+                (" ", fg),
+                ("May 28 13:03 ", c("cyan")),
+                ("noctalia_color_scheme_manager", c("cyan")),
+            ],
+            # - rw- r-- r--  gmusa  staff  2,2k  May 28 16:33 AGENTS.md
+            [
+                ("-", c("bright")),
+                ("rw-", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("2,2k", c("green")),
+                (" ", fg),
+                ("May 28 16:33 ", c("cyan")),
+                ("AGENTS.md", c("yellow")),
+            ],
+            # - rw- r-- r--  gmusa  staff   598  May 28 13:03 pyproject.toml
+            [
+                ("-", c("bright")),
+                ("rw-", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("598", c("green")),
+                (" ", fg),
+                ("May 28 13:03 ", c("cyan")),
+                ("pyproject.toml", c("yellow")),
+            ],
+            # - rw- r-- r--  gmusa  staff   466  May 28 16:01 pyrightconfig.json
+            [
+                ("-", c("bright")),
+                ("rw-", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("466", c("green")),
+                (" ", fg),
+                ("May 28 16:01 ", c("cyan")),
+                ("pyrightconfig.json", fg),
+            ],
+            # - rw- r-- r--  gmusa  staff   424  May 28 12:34 README.md
+            [
+                ("-", c("bright")),
+                ("rw-", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("424", c("green")),
+                (" ", fg),
+                ("May 28 12:34 ", c("cyan")),
+                ("README.md", c("yellow")),
+            ],
+            # - rw- r-- r--  gmusa  staff    86  May 28 13:01 main.py
+            [
+                ("-", c("bright")),
+                ("rw-", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                ("r--", c("bright")),
+                ("-", c("bright")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                (" 86", c("green")),
+                (" ", fg),
+                ("May 28 13:01 ", c("cyan")),
+                ("main.py", fg),
+            ],
+            # - rwx r-x r-x  gmusa  staff   106  May 29 16:35 test.sh
+            [
+                ("-", c("bright")),
+                ("rwx", c("green")),
+                ("-", c("green")),
+                ("r-x", c("green")),
+                ("-", c("green")),
+                ("r-x", c("green")),
+                ("-", c("green")),
+                (" ", fg),
+                ("gmusa", c("yellow")),
+                (" ", fg),
+                ("staff", c("yellow")),
+                (" ", fg),
+                ("  ", fg),
+                ("106", c("green")),
+                (" ", fg),
+                ("May 29 16:35 ", c("cyan")),
+                ("test.sh", c("green")),
+            ],
+        ]
+
+        for line in sample_lines:
+            line_box = Gtk.Box()
+            line_box.set_spacing(0)
+
+            for text, color_key in line:
+                lbl = Gtk.Label()
+                lbl.set_text(text)
+                lbl.set_halign(Gtk.Align.START)
+                lbl.set_valign(Gtk.Align.CENTER)
+                lbl.set_markup(f'<span color="{color_key}">{text}</span>')
+                line_box.append(lbl)
+
+            container.append(line_box)
+
+        return container
+
+    def cleanup(self) -> None:
+        """Disconnect from reactive colors."""
+        self.reactive_colors.disconnect(self._on_colors_changed)

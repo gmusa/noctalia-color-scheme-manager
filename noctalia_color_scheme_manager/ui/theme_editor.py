@@ -21,13 +21,7 @@ class ThemeEditor(Gtk.Box):
         light_colors: Dict with light variant colors
     """
 
-    def __init__(
-        self,
-        theme_name: str,
-        dark_colors: dict,
-        light_colors: dict,
-        **kwargs
-    ):
+    def __init__(self, theme_name: str, dark_colors: dict, light_colors: dict, **kwargs):
         super().__init__(**kwargs)
         self.set_orientation(Gtk.Orientation.VERTICAL)
         self.set_spacing(0)
@@ -138,9 +132,9 @@ def _build_card(
     row.set_spacing(16)
 
     if is_terminal:
-        # TerminalEditor still uses dict (not yet reactive)
-        editor = TerminalEditor(reactive_colors.get_all())
-        preview = TerminalPreview(reactive_colors.get_all())
+        # TerminalEditor shares ReactiveColors with TerminalPreview
+        editor = TerminalEditor(reactive_colors)
+        preview = TerminalPreview(reactive_colors)
     else:
         # MaterialEditor and MaterialPreview share the same ReactiveColors
         editor = MaterialEditor(reactive_colors)
