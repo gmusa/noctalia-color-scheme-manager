@@ -1,0 +1,15 @@
+{
+  "include": ["noctalia_color_scheme_manager"],
+  "exclude": ["**/node_modules", "**/__pycache__", ".venv"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportUnknownVariableType": false,
+  "reportUnknownMemberType": false,
+  "reportMissingTypeStubs": false,
+  "extraPaths": [".venv/lib/python3.12/site-packages/gi"],
+  "executionEnvirons": {
+    "GI_TYPELIB_PATH": ".venv/lib/gobject-introspection-1.0"
+  }
+}

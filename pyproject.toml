@@ -1,0 +1,23 @@
+[project]
+name = "noctalia-color-scheme-manager"
+version = "0.1.0"
+description = "GUI application to create and edit color themes for Noctalia"
+authors = [{ name = "Guillermo Musante", email = "gmusa@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = ["pygobject>=3.48", "pyyaml>=6.0"]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8"]
+
+[project.scripts]
+nctheme = "noctalia_color_scheme_manager.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["noctalia_color_scheme_manager"]
+
+[tool.ruff]
+line-length = 100
